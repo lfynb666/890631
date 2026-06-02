@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
 
                 if (showWebView) {
                     WebViewScreen(
-                        settings = currentSettings,
+                        connectionSettings = currentSettings,
                         onClose = {
                             showWebView = false
                             errorMessage = null
