@@ -56,7 +56,7 @@ WebView	Android System WebView（基于 Chromium）
 网络检测	OkHttp（检查服务器健康 /global/health）
 本地存储	Jetpack DataStore (Preferences)
 构建	Gradle Kotlin DSL
-最低 SDK	33 (Android 13)
+最低 SDK	26 (Android 8.0)
 目标 SDK	35 (Android 15)
 协作与构建约束
 - 不准在本地执行任何构建、测试、lint、打包或安装 APK 的命令。
@@ -96,7 +96,7 @@ sudo snap install android-studio --classic
 # - 模板：Empty Activity（Compose）
 # - 包名：com.example.opencode
 # - 语言：Kotlin
-# - Minimum SDK：API 33
+# - Minimum SDK：API 26
 
 # 或者用命令行
 # （以下为手动创建，非必须）

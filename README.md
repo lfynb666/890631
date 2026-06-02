@@ -15,3 +15,5 @@ opencode web --hostname 0.0.0.0 --port 4096
 ```
 
 Open the APK, enter the computer's LAN host and port, then connect.
+
+Minimum supported Android version: Android 8.0 (API 26).
