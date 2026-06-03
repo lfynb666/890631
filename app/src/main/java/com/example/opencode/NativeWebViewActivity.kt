@@ -32,6 +32,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONArray
 import org.json.JSONObject
 
 class NativeWebViewActivity : Activity() {
@@ -307,10 +308,101 @@ class NativeWebViewActivity : Activity() {
                 title = "opencode session error",
                 text = "A session reported an error.",
             )
+            "permission.asked" -> showPermissionNotification(event)
         }
     }
 
-    private fun showOpencodeNotification(title: String, text: String) {
+    private fun showPermissionNotification(event: JSONObject) {
+        val request = event.optJSONObject("properties")
+            ?: event.optJSONObject("data")
+            ?: event
+        val requestID = request.firstString("requestID", "permissionID", "id")
+        if (requestID.isBlank()) {
+            return
+        }
+
+        val notificationID = requestID.hashCode()
+        val permission = request.firstString("permission", "type").ifBlank { "permission" }
+        val details = buildPermissionDetails(request)
+        val allowIntent = permissionActionIntent(
+            action = OpencodePermissionReceiver.ACTION_ALLOW,
+            request = request,
+            requestID = requestID,
+            notificationID = notificationID,
+        )
+        val denyIntent = permissionActionIntent(
+            action = OpencodePermissionReceiver.ACTION_DENY,
+            request = request,
+            requestID = requestID,
+            notificationID = notificationID,
+        )
+
+        showOpencodeNotification(
+            title = "opencode requests permission",
+            text = "$permission: $details",
+            notificationID = notificationID,
+            actions = listOf(
+                Notification.Action.Builder(
+                    R.drawable.ic_notification,
+                    "Allow",
+                    allowIntent,
+                ).build(),
+                Notification.Action.Builder(
+                    R.drawable.ic_notification,
+                    "Deny",
+                    denyIntent,
+                ).build(),
+            ),
+        )
+    }
+
+    private fun buildPermissionDetails(request: JSONObject): String {
+        val patterns = request.optJSONArray("patterns")?.joinToString()
+        if (!patterns.isNullOrBlank()) {
+            return patterns
+        }
+
+        val metadata = request.optJSONObject("metadata")
+        val command = metadata?.firstString("command", "description", "title", "path")
+        if (!command.isNullOrBlank()) {
+            return command
+        }
+
+        val tool = request.optJSONObject("tool")
+        val callID = tool?.optString("callID").orEmpty()
+        return callID.ifBlank { "tap to respond" }
+    }
+
+    private fun permissionActionIntent(
+        action: String,
+        request: JSONObject,
+        requestID: String,
+        notificationID: Int,
+    ): PendingIntent {
+        val sessionID = request.optString("sessionID")
+        val intent = Intent(this, OpencodePermissionReceiver::class.java).apply {
+            this.action = action
+            putExtra(OpencodePermissionReceiver.EXTRA_BASE_URL, baseUrl)
+            putExtra(OpencodePermissionReceiver.EXTRA_PASSWORD, password)
+            putExtra(OpencodePermissionReceiver.EXTRA_REQUEST_ID, requestID)
+            putExtra(OpencodePermissionReceiver.EXTRA_SESSION_ID, sessionID)
+            putExtra(OpencodePermissionReceiver.EXTRA_NOTIFICATION_ID, notificationID)
+        }
+        val requestCode = "$action:$requestID".hashCode()
+        return PendingIntent.getBroadcast(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun showOpencodeNotification(
+        title: String,
+        text: String,
+        notificationID: Int = System.currentTimeMillis().toInt(),
+        actions: List<Notification.Action> = emptyList(),
+    ) {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -331,15 +423,40 @@ class NativeWebViewActivity : Activity() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(openIntent)
             .setAutoCancel(true)
+            .apply {
+                actions.forEach(::addAction)
+            }
             .build()
 
-        notificationManager().notify(System.currentTimeMillis().toInt(), notification)
+        notificationManager().notify(notificationID, notification)
     }
 
     private fun notificationManager(): NotificationManager =
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun JSONObject.firstString(vararg names: String): String {
+        for (name in names) {
+            val value = optString(name)
+            if (value.isNotBlank()) {
+                return value
+            }
+        }
+        return ""
+    }
+
+    private fun JSONArray.joinToString(): String {
+        val values = mutableListOf<String>()
+        for (index in 0 until length()) {
+            val value = optString(index)
+            if (value.isNotBlank()) {
+                values += value
+            }
+        }
+        return values.joinToString(", ")
+    }
 
     private fun hideCustomView() {
         fullscreenCustomView?.let(rootContainer::removeView)
