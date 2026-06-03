@@ -1,0 +1,45 @@
+name: Release Debug APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download latest debug APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          RUN_ID="$(gh run list --repo "$REPO" --workflow "Android Debug APK" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful Android Debug APK run found" >&2
+            exit 1
+          fi
+          echo "Using Android Debug APK run $RUN_ID"
+          gh run download "$RUN_ID" --repo "$REPO" --name opencode-debug-apk --dir release-artifact
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          APK="$(find release-artifact -type f -name '*.apk' | head -n 1)"
+          if [ -z "$APK" ]; then
+            echo "No APK found in downloaded artifact" >&2
+            exit 1
+          fi
+          cp "$APK" "opencode-debug-${GITHUB_REF_NAME}.apk"
+          gh release create "$GITHUB_REF_NAME" "opencode-debug-${GITHUB_REF_NAME}.apk" \
+            --repo "$REPO" \
+            --target "$GITHUB_SHA" \
+            --title "OpenCode APK ${GITHUB_REF_NAME}" \
+            --notes "Debug APK built by the latest successful Android Debug APK workflow on main."
