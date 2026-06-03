@@ -17,7 +17,9 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Base64
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.Window
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.HttpAuthHandler
@@ -38,6 +40,8 @@ import org.json.JSONObject
 class NativeWebViewActivity : Activity() {
     private lateinit var rootContainer: FrameLayout
     private lateinit var webView: WebView
+    private var keyboardInsetBottom = 0
+    private var keyboardLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var fullscreenCustomView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -59,6 +63,7 @@ class NativeWebViewActivity : Activity() {
             setBackgroundColor(Color.BLACK)
         }
         setContentView(rootContainer)
+        setupKeyboardResize()
         setupNotifications()
         launchWebView()
         startOpencodeEventListener()
@@ -88,6 +93,10 @@ class NativeWebViewActivity : Activity() {
         shouldListenForEvents = false
         eventConnection?.disconnect()
         eventConnection = null
+        keyboardLayoutListener?.let {
+            rootContainer.viewTreeObserver.removeOnGlobalLayoutListener(it)
+        }
+        keyboardLayoutListener = null
         super.onDestroy()
     }
 
@@ -115,7 +124,58 @@ class NativeWebViewActivity : Activity() {
             ),
         )
         setupWebView()
+        applyKeyboardInset()
         webView.loadUrl(baseUrl)
+    }
+
+    private fun setupKeyboardResize() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            rootContainer.setOnApplyWindowInsetsListener { _, insets ->
+                val imeVisible = insets.isVisible(WindowInsets.Type.ime())
+                val imeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom
+                val navBottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+                setKeyboardInset(if (imeVisible) (imeBottom - navBottom).coerceAtLeast(0) else 0)
+                insets
+            }
+        } else {
+            keyboardLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+                val visibleFrame = android.graphics.Rect()
+                rootContainer.getWindowVisibleDisplayFrame(visibleFrame)
+                val screenHeight = rootContainer.rootView.height
+                val coveredHeight = (screenHeight - visibleFrame.bottom).coerceAtLeast(0)
+                val keyboardVisible = coveredHeight > screenHeight * KEYBOARD_VISIBLE_THRESHOLD
+                setKeyboardInset(if (keyboardVisible) coveredHeight else 0)
+            }
+            rootContainer.viewTreeObserver.addOnGlobalLayoutListener(keyboardLayoutListener)
+        }
+    }
+
+    private fun setKeyboardInset(bottom: Int) {
+        if (keyboardInsetBottom == bottom) {
+            return
+        }
+        keyboardInsetBottom = bottom
+        applyImmersiveMode()
+        if (::webView.isInitialized) {
+            applyKeyboardInset()
+        }
+    }
+
+    private fun applyKeyboardInset() {
+        if (!::webView.isInitialized) {
+            return
+        }
+        val layoutParams = webView.layoutParams as FrameLayout.LayoutParams
+        if (layoutParams.bottomMargin != keyboardInsetBottom) {
+            layoutParams.bottomMargin = keyboardInsetBottom
+            webView.layoutParams = layoutParams
+            webView.post {
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new Event('resize'));",
+                    null,
+                )
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -471,12 +531,16 @@ class NativeWebViewActivity : Activity() {
     private fun applyImmersiveMode() {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            if (keyboardInsetBottom > 0) {
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            } else {
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            }
     }
 
     companion object {
@@ -487,5 +551,6 @@ class NativeWebViewActivity : Activity() {
         private const val NOTIFICATION_CHANNEL_ID = "opencode_tasks"
         private const val EVENT_CONNECT_TIMEOUT_MS = 10_000
         private const val EVENT_RECONNECT_DELAY_MS = 3_000L
+        private const val KEYBOARD_VISIBLE_THRESHOLD = 0.15f
     }
 }

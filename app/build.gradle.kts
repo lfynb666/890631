@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.opencode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.1.8-official-icon"
+        versionCode = 10
+        versionName = "0.1.9-keyboard-resize"
     }
 
     buildTypes {
