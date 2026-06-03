@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.opencode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.1.7-permission-actions"
+        versionCode = 9
+        versionName = "0.1.8-official-icon"
     }
 
     buildTypes {
