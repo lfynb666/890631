@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.opencode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.1.10-notification-diagnostics"
+        versionCode = 12
+        versionName = "0.1.11-icon-scale"
     }
 
     buildTypes {
