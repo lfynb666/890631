@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<scale xmlns:android="http://schemas.android.com/apk/res/android"
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/opencode_launcher"
-    android:scaleGravity="center"
-    android:scaleHeight="80%"
-    android:scaleWidth="80%" />
+    android:inset="10%" />

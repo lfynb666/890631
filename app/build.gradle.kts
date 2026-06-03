@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.opencode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.1.11-icon-scale"
+        versionCode = 13
+        versionName = "0.1.12-icon-inset"
     }
 
     buildTypes {
