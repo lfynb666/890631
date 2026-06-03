@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.opencode"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4-native"
+        versionCode = 6
+        versionName = "0.1.5-upload"
     }
 
     buildTypes {

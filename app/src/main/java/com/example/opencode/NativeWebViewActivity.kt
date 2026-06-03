@@ -18,6 +18,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.ValueCallback
 import android.widget.FrameLayout
 
 class NativeWebViewActivity : Activity() {
@@ -25,16 +26,13 @@ class NativeWebViewActivity : Activity() {
     private lateinit var webView: WebView
     private var fullscreenCustomView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val baseUrl: String by lazy { intent.getStringExtra(EXTRA_URL).orEmpty() }
     private val password: String by lazy { intent.getStringExtra(EXTRA_PASSWORD).orEmpty() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -65,6 +63,19 @@ class NativeWebViewActivity : Activity() {
             webView.canGoBack() -> webView.goBack()
             else -> super.onBackPressed()
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != FILE_CHOOSER_REQUEST) {
+            return
+        }
+
+        val callback = filePathCallback ?: return
+        filePathCallback = null
+        callback.onReceiveValue(
+            WebChromeClient.FileChooserParams.parseResult(resultCode, data),
+        )
     }
 
     private fun launchWebView() {
@@ -136,6 +147,26 @@ class NativeWebViewActivity : Activity() {
             }
         }
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView,
+                filePathCallback: ValueCallback<Array<Uri>>,
+                fileChooserParams: FileChooserParams,
+            ): Boolean {
+                this@NativeWebViewActivity.filePathCallback?.onReceiveValue(null)
+                this@NativeWebViewActivity.filePathCallback = filePathCallback
+                return try {
+                    startActivityForResult(
+                        fileChooserParams.createIntent(),
+                        FILE_CHOOSER_REQUEST,
+                    )
+                    true
+                } catch (exception: Exception) {
+                    this@NativeWebViewActivity.filePathCallback = null
+                    filePathCallback.onReceiveValue(null)
+                    false
+                }
+            }
+
             override fun onShowCustomView(
                 view: View,
                 callback: WebChromeClient.CustomViewCallback,
@@ -189,5 +220,6 @@ class NativeWebViewActivity : Activity() {
     companion object {
         const val EXTRA_URL = "url"
         const val EXTRA_PASSWORD = "password"
+        private const val FILE_CHOOSER_REQUEST = 2401
     }
 }
