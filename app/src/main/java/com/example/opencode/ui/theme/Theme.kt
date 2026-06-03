@@ -37,6 +37,3 @@ fun OpenCodeTheme(
         content = content,
     )
 }
-
-val ColorScheme.success: Color
-    get() = Color(0xFF16A34A)

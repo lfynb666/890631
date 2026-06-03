@@ -41,6 +41,7 @@ fun WebViewScreen(
     var canGoBack by remember { mutableStateOf(false) }
     var currentUrl by remember { mutableStateOf(connectionSettings.baseUrl) }
     var userAgent by remember { mutableStateOf("") }
+    var webViewLoaded by remember { mutableStateOf(false) }
     var debugLines by remember { mutableStateOf(listOf("Debug panel ready")) }
 
     BackHandler(enabled = canGoBack) {
@@ -74,11 +75,11 @@ fun WebViewScreen(
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         cacheMode = WebSettings.LOAD_DEFAULT
                         textZoom = 100
-                        userAgent = userAgentString
                         setSupportZoom(true)
                         builtInZoomControls = true
                         displayZoomControls = false
                     }
+                    userAgent = settings.userAgentString ?: ""
                     webChromeClient = object : WebChromeClient() {
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                             addDebugLine(
@@ -135,7 +136,8 @@ fun WebViewScreen(
             },
             update = { view ->
                 webView = view
-                if (view.url == null) {
+                if (!webViewLoaded && view.url == null) {
+                    webViewLoaded = true
                     view.loadUrl(connectionSettings.baseUrl)
                 }
             },

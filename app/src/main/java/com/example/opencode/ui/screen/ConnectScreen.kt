@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,7 @@ fun ConnectScreen(
                     label = { Text("Host") },
                     placeholder = { Text("192.168.1.100") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isChecking,
                 )
@@ -93,7 +95,10 @@ fun ConnectScreen(
                     label = { Text("Port") },
                     placeholder = { Text("4096") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isChecking,
                 )
@@ -105,6 +110,10 @@ fun ConnectScreen(
                     placeholder = { Text("Optional") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onDone = { onConnect(settings) },
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isChecking,
                 )

@@ -32,8 +32,10 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -50,6 +52,7 @@ class NativeWebViewActivity : Activity() {
     private var hasShownEventConnectedNotification = false
     private var lastEventErrorNotificationAt = 0L
     @Volatile private var shouldListenForEvents = false
+    private val notificationIdCounter = AtomicLong(System.currentTimeMillis())
     private val baseUrl: String by lazy { intent.getStringExtra(EXTRA_URL).orEmpty() }
     private val password: String by lazy { intent.getStringExtra(EXTRA_PASSWORD).orEmpty() }
 
@@ -93,6 +96,7 @@ class NativeWebViewActivity : Activity() {
 
     override fun onDestroy() {
         shouldListenForEvents = false
+        eventThread?.interrupt()
         eventConnection?.disconnect()
         eventConnection = null
         keyboardLayoutListener?.let {
@@ -113,6 +117,17 @@ class NativeWebViewActivity : Activity() {
         callback.onReceiveValue(
             WebChromeClient.FileChooserParams.parseResult(resultCode, data),
         )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) {
+            return
+        }
     }
 
     private fun launchWebView() {
@@ -308,13 +323,20 @@ class NativeWebViewActivity : Activity() {
     private fun startOpencodeEventListener() {
         shouldListenForEvents = true
         eventThread = Thread {
+            var reconnectDelay = EVENT_RECONNECT_DELAY_MS
             while (shouldListenForEvents) {
                 try {
                     listenToEventStream()
+                    reconnectDelay = EVENT_RECONNECT_DELAY_MS
                 } catch (exception: Exception) {
                     if (shouldListenForEvents) {
                         showEventErrorNotification(exception)
-                        Thread.sleep(EVENT_RECONNECT_DELAY_MS)
+                        try {
+                            Thread.sleep(reconnectDelay)
+                            reconnectDelay = (reconnectDelay * 2).coerceAtMost(EVENT_MAX_RECONNECT_DELAY_MS)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
                     }
                 }
             }
@@ -351,15 +373,19 @@ class NativeWebViewActivity : Activity() {
         BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
             val eventData = StringBuilder()
             while (shouldListenForEvents) {
-                val line = reader.readLine() ?: break
-                when {
-                    line.isBlank() -> {
-                        if (eventData.isNotBlank()) {
-                            handleOpencodeEvent(eventData.toString())
-                            eventData.clear()
+                try {
+                    val line = reader.readLine() ?: break
+                    when {
+                        line.isBlank() -> {
+                            if (eventData.isNotBlank()) {
+                                handleOpencodeEvent(eventData.toString())
+                                eventData.clear()
+                            }
                         }
+                        line.startsWith("data:") -> eventData.append(line.removePrefix("data:").trim())
                     }
-                    line.startsWith("data:") -> eventData.append(line.removePrefix("data:").trim())
+                } catch (_: InterruptedIOException) {
+                    break
                 }
             }
         }
@@ -494,7 +520,7 @@ class NativeWebViewActivity : Activity() {
     private fun showOpencodeNotification(
         title: String,
         text: String,
-        notificationID: Int = System.currentTimeMillis().toInt(),
+        notificationID: Int = notificationIdCounter.incrementAndGet().toInt(),
         actions: List<Notification.Action> = emptyList(),
     ) {
         if (
@@ -587,6 +613,7 @@ class NativeWebViewActivity : Activity() {
         private const val NOTIFICATION_CHANNEL_ID = "opencode_tasks"
         private const val EVENT_CONNECT_TIMEOUT_MS = 10_000
         private const val EVENT_RECONNECT_DELAY_MS = 3_000L
+        private const val EVENT_MAX_RECONNECT_DELAY_MS = 30_000L
         private const val EVENT_CONNECTED_NOTIFICATION_ID = 2601
         private const val EVENT_ERROR_NOTIFICATION_ID = 2602
         private const val EVENT_ERROR_NOTIFICATION_INTERVAL_MS = 60_000L

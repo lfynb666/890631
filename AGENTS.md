@@ -1,6 +1,15 @@
 项目概览
+仓库地址: https://github.com/LuFengyuan666/opencode-apk.git
+
 一个极简的 Android APK（Kotlin + Jetpack Compose），用 WebView 内嵌 opencode 的网页界面，
 让你在安卓手机上通过局域网连接并操作 opencode。
+
+对 agent 的约定
+- 回答使用中文
+- 只在用户明确要求时 commit/push
+- 不准在本地执行任何构建、测试、lint、打包或安装 APK 的命令
+- 代码修改后推送到 GitHub，由 GitHub Actions 自动构建验证
+
 工作方式
 ┌──────────────────┐         局域网 WiFi         ┌─────────────────────┐
 │   Android 手机    │ ◄──────────────────────────► │   Linux PC (Arch)   │
@@ -29,23 +38,25 @@ opencode-android/
 ├── app/
 │   ├── src/main/
 │   │   ├── java/com/example/opencode/
-│   │   │   ├── MainActivity.kt            # 唯一 Activity 入口
+│   │   │   ├── MainActivity.kt                 # Compose Activity 入口（连接页）
+│   │   │   ├── NativeWebViewActivity.kt        # 主 WebView Activity（通知/SSE/文件上传）
+│   │   │   ├── OpencodePermissionReceiver.kt   # BroadcastReceiver 处理权限通知
 │   │   │   ├── ui/
-│   │   │   │   ├── theme/                  # Material 3 主题配色
+│   │   │   │   ├── theme/                       # Material 3 主题配色
 │   │   │   │   ├── screen/
-│   │   │   │   │   ├── ConnectScreen.kt    # 连接页：IP、端口、密码
-│   │   │   │   │   └── WebViewScreen.kt    # WebView 加载 opencode 网页
-│   │   │   │   └── component/              # 可复用的组件
+│   │   │   │   │   ├── ConnectScreen.kt         # 连接页：IP、端口、密码
+│   │   │   │   │   └── WebViewScreen.kt         # 调试用 Compose WebView（带 debug overlay）
 │   │   │   ├── data/
-│   │   │   │   └── Preferences.kt          # DataStore 持久化保存设置
+│   │   │   │   ├── ConnectionSettings.kt        # 连接配置数据类
+│   │   │   │   └── Preferences.kt               # DataStore 持久化保存设置
 │   │   │   └── network/
-│   │   │       └── HealthCheck.kt          # 检测服务器是否可达
-│   │   ├── res/                            # 字符串、图标等资源
+│   │   │       └── HealthCheck.kt               # 检测服务器是否可达
+│   │   ├── res/                                 # 字符串、图标等资源
 │   │   └── AndroidManifest.xml
 │   └── build.gradle.kts
 ├── gradle/
-│   └── libs.versions.toml                  # 依赖版本统一管理
-├── build.gradle.kts                         # 根构建脚本
+│   └── libs.versions.toml                       # 依赖版本统一管理
+├── build.gradle.kts                              # 根构建脚本
 ├── settings.gradle.kts
 └── gradle.properties
 技术栈
@@ -53,31 +64,30 @@ opencode-android/
 语言	Kotlin
 UI 框架	Jetpack Compose + Material 3
 WebView	Android System WebView（基于 Chromium）
-网络检测	OkHttp（检查服务器健康 /global/health）
+网络检测	OkHttp 4.12（检查服务器健康 /global/health）
 本地存储	Jetpack DataStore (Preferences)
 构建	Gradle Kotlin DSL
 最低 SDK	26 (Android 8.0)
 目标 SDK	35 (Android 15)
-协作与构建约束
-- 不准在本地执行任何构建、测试、lint、打包或安装 APK 的命令。
-- 禁止运行 `./gradlew assembleDebug`、`./gradlew assembleRelease`、`./gradlew test`、`./gradlew lint`、`adb install` 等本地构建/安装相关命令。
-- 代码修改完成后，推送到 `https://github.com/LuFengyuan666/opencode-apk.git`，由 GitHub Actions 自动构建 APK。
-- APK 只能从 GitHub Actions 的构建产物或发布页获取，不使用本地输出目录。
-- 如遇到仓库权限、Action 配置、签名配置等不明确的问题，先询问项目负责人，不自行假设。
+编译 SDK	35
 核心功能
-第一期（最简可用版）
+当前已实现
 - 连接页面：输入 IP:Port 和可选密码
 - WebView 加载 opencode 网页
 - HTTP Basic Auth 自动处理
 - 记住上次的连接设置（DataStore 持久化）
 - 服务器连通性检测（开屏先探活）
-- INTERNET 权限
+- SSE 事件监听（/event 端点），通过原生通知推送任务/权限事件
+- 权限请求通知支持 Allow/Deny 快捷操作
+- 全屏沉浸模式
+- 文件上传支持（WebView 文件选择器）
+- 键盘自适应（键盘弹起时 WebView 底部上移）
+- INTERNET、POST_NOTIFICATIONS、READ_MEDIA_* 及 READ_EXTERNAL_STORAGE 权限（用于 WebView 文件上传和通知推送）
 后续可加
 - mDNS 自动发现局域网内的 opencode 服务（opencode.local）
 - 连接历史记录（多台 PC 快速切换）
 - 后台保持连接 / 通知提醒
 - 页面下拉刷新
-- 全屏沉浸模式（隐藏状态栏）
 开发环境搭建
 1. 安装 Android 开发工具
 # Arch Linux
@@ -85,12 +95,12 @@ yay -S android-studio android-sdk android-sdk-platform-tools
 
 # Ubuntu
 sudo snap install android-studio --classic
-# 打开 Android Studio，按向导安装 SDK 34
+# 打开 Android Studio，按向导安装 SDK 35
 确保已安装：
 - JDK 17+
-- Android SDK Platform 34
-- Android SDK Build-Tools 34+
-- Gradle 8.x（项目自带 wrapper 无需手动装）
+- Android SDK Platform 35
+- Android SDK Build-Tools 35+
+- Gradle 8.x（CI 通过 setup-gradle Action 安装，本地若构建需自行配置）
 2. 初始化项目
 # 在 Android Studio 中创建新项目：
 # - 模板：Empty Activity（Compose）
@@ -112,7 +122,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
@@ -195,13 +204,6 @@ suspend fun checkHealth(url: String): Boolean {
         false
     }
 }
-协作命令速查
-git status                       # 查看工作区状态
-git diff                         # 查看本地修改
-git add .                        # 暂存修改
-git commit -m "..."              # 提交修改
-git push origin main             # 推送到 GitHub，触发 Actions 自动构建
-adb logcat | grep -i opencode    # 仅查看应用日志，不用于本地安装或构建
 代码风格约定
 - Kotlin 写法：遵循 Kotlin 官方风格。能用 val 不用 var，优先表达式体函数。
 - Compose 写法：遵循官方指南。状态提升（hoisting）、单向数据流。
@@ -209,8 +211,19 @@ adb logcat | grep -i opencode    # 仅查看应用日志，不用于本地安装
 - 导入：不用通配符导入（*），不用别名导入。
 - 注释：只写不显而易见的逻辑，不写废话注释。
 - 不用 emoji。
+
+构建与验证
+- 不允许在本地执行 Gradle 构建、测试、lint 或 APK 安装命令
+- 构建由 GitHub Actions 自动完成：
+  - 推送到 main 分支 → .github/workflows/android-debug-apk.yml 触发 debug 构建
+  - 推送 v* 标签 → .github/workflows/release-debug-apk.yml 创建 GitHub Release
+- APK 只能从 GitHub Actions 的构建产物或发布页获取，不使用本地输出目录
+- 查看构建结果：GitHub 仓库 Actions 页面或 Release 页面
+- 可以用 adb logcat | grep -i opencode 查看应用日志
+- 如遇到仓库权限、Action 配置、签名配置等不明确的问题，先询问项目负责人，不自行假设
+
 安全提醒（个人使用场景）
 - WebView 默认不信任所有证书，这是安全的，不用改动。
 - 密码通过 HTTP Basic Auth 传输，仅在可信局域网内使用。
 - 服务器密码明文保存在 DataStore 中（个人使用足够简单，如需分发可用 EncryptedSharedPreferences）。
-- 仅申请 INTERNET 权限，不申请文件、相机、位置等无关权限。
+- 申请 INTERNET、POST_NOTIFICATIONS 及文件读取相关权限（用于 WebView 文件上传），不申请相机、位置等无关权限。

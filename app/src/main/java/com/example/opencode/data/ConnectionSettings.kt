@@ -22,7 +22,17 @@ data class ConnectionSettings(
 
     val isConnectable: Boolean
         get() {
+            val schemeHost = host.trim()
+                .let {
+                    when {
+                        it.startsWith("http://") || it.startsWith("https://") -> it
+                        else -> "http://$it"
+                    }
+                }
+                .trimEnd('/')
+            val hasPort = schemeHost.substringAfter("://").contains(":")
             val portNumber = port.trim().toIntOrNull()
-            return host.isNotBlank() && portNumber != null && portNumber in 1..65535
+            return host.isNotBlank() &&
+                (hasPort || (portNumber != null && portNumber in 1..65535))
         }
 }

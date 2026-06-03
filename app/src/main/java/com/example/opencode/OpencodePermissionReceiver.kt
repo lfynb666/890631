@@ -29,10 +29,15 @@ class OpencodePermissionReceiver : BroadcastReceiver() {
         }
 
         context.notificationManager().cancel(notificationID)
+        val pendingResult = goAsync()
         Thread {
-            val replied = replyWithCurrentApi(baseUrl, password, requestID, reply)
-            if (!replied && sessionID.isNotBlank()) {
-                replyWithLegacyApi(baseUrl, password, sessionID, requestID, reply)
+            try {
+                val replied = replyWithCurrentApi(baseUrl, password, requestID, reply)
+                if (!replied && sessionID.isNotBlank()) {
+                    replyWithLegacyApi(baseUrl, password, sessionID, requestID, reply)
+                }
+            } finally {
+                pendingResult.finish()
             }
         }.apply {
             name = "opencode-permission-reply"

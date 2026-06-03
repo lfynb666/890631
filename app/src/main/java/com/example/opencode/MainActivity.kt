@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.opencode.data.ConnectionSettings
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
                 var currentSettings by remember { mutableStateOf(savedSettings) }
                 var isChecking by remember { mutableStateOf(false) }
                 var errorMessage by remember { mutableStateOf<String?>(null) }
-                var autoConnectAttempted by remember { mutableStateOf(false) }
+                var autoConnectAttempted by rememberSaveable { mutableStateOf(false) }
 
                 LaunchedEffect(savedSettings) {
                     currentSettings = savedSettings
