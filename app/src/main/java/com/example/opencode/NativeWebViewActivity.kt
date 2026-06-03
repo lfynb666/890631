@@ -47,6 +47,8 @@ class NativeWebViewActivity : Activity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var eventConnection: HttpURLConnection? = null
     private var eventThread: Thread? = null
+    private var hasShownEventConnectedNotification = false
+    private var lastEventErrorNotificationAt = 0L
     @Volatile private var shouldListenForEvents = false
     private val baseUrl: String by lazy { intent.getStringExtra(EXTRA_URL).orEmpty() }
     private val password: String by lazy { intent.getStringExtra(EXTRA_PASSWORD).orEmpty() }
@@ -309,8 +311,9 @@ class NativeWebViewActivity : Activity() {
             while (shouldListenForEvents) {
                 try {
                     listenToEventStream()
-                } catch (_: Exception) {
+                } catch (exception: Exception) {
                     if (shouldListenForEvents) {
+                        showEventErrorNotification(exception)
                         Thread.sleep(EVENT_RECONNECT_DELAY_MS)
                     }
                 }
@@ -339,6 +342,11 @@ class NativeWebViewActivity : Activity() {
             val encoded = Base64.encodeToString(credentials.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
             connection.setRequestProperty("Authorization", "Basic $encoded")
         }
+        val responseCode = connection.responseCode
+        if (responseCode !in 200..299) {
+            throw IllegalStateException("Event stream HTTP $responseCode")
+        }
+        showEventConnectedNotification()
 
         BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
             val eventData = StringBuilder()
@@ -355,6 +363,32 @@ class NativeWebViewActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun showEventConnectedNotification() {
+        if (hasShownEventConnectedNotification) {
+            return
+        }
+        hasShownEventConnectedNotification = true
+        showOpencodeNotification(
+            title = "opencode notifications connected",
+            text = "The app is listening for task and permission events.",
+            notificationID = EVENT_CONNECTED_NOTIFICATION_ID,
+        )
+    }
+
+    private fun showEventErrorNotification(exception: Exception) {
+        val now = System.currentTimeMillis()
+        if (now - lastEventErrorNotificationAt < EVENT_ERROR_NOTIFICATION_INTERVAL_MS) {
+            return
+        }
+        lastEventErrorNotificationAt = now
+        showOpencodeNotification(
+            title = "opencode notifications disconnected",
+            text = exception.message?.takeIf { it.isNotBlank() }
+                ?: "The app could not read the opencode event stream.",
+            notificationID = EVENT_ERROR_NOTIFICATION_ID,
+        )
     }
 
     private fun handleOpencodeEvent(payload: String) {
@@ -532,7 +566,9 @@ class NativeWebViewActivity : Activity() {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility =
             if (keyboardInsetBottom > 0) {
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             } else {
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -551,6 +587,9 @@ class NativeWebViewActivity : Activity() {
         private const val NOTIFICATION_CHANNEL_ID = "opencode_tasks"
         private const val EVENT_CONNECT_TIMEOUT_MS = 10_000
         private const val EVENT_RECONNECT_DELAY_MS = 3_000L
+        private const val EVENT_CONNECTED_NOTIFICATION_ID = 2601
+        private const val EVENT_ERROR_NOTIFICATION_ID = 2602
+        private const val EVENT_ERROR_NOTIFICATION_INTERVAL_MS = 60_000L
         private const val KEYBOARD_VISIBLE_THRESHOLD = 0.15f
     }
 }
